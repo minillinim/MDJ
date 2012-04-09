@@ -43,7 +43,7 @@ class MDJClass(xbmcgui.Window):
         #
         self.musicRoot = '/home/uqmimelf/LEISURE/MUSIC/'    # point this at the root of your party music
         self.queueMax = 8                                  # no more than this many in the queue
-        self.bgimg = os.getcwd()+'/images/skin.png'
+        self.bgimg = os.path.join(os.getcwd(),'images','skin.png')
         
         #
         # get and parse the global window dimensions
