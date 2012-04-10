@@ -23,6 +23,7 @@
 import xbmc
 import xbmcgui
 import xbmcaddon
+import xbmcplugin
 import re
 import sys
 import os
@@ -49,7 +50,7 @@ class MDJClass(xbmcgui.Window):
         # Some global variables
         #
         Addon = xbmcaddon.Addon( id=__plugin__)
-        self.musicRoot = 'C:\Users\minillinim\Desktop\TEST'    # point this at the root of your party music
+        self.musicRoot = Addon.getSetting('music_root')    # point this at the root of your party music
         self.queueMax = 8                                  # no more than this many in the queue
         self.bgimg = os.path.join(Addon.getAddonInfo('path'),'images','skin.png')
         
@@ -80,11 +81,11 @@ class MDJClass(xbmcgui.Window):
         self.addControl(self.backgroundImage)
 
         # add the nowPlaying and queue count labels to the top of the screen
-        self.nowPlayingFrame = xbmcgui.ControlLabel(listLeftQueue, 33, listWidth * 2, topBarHeight, '', 'special12', '0xFFFFFFFF')
+        self.nowPlayingFrame = xbmcgui.ControlLabel(listLeftQueue, 33, listWidth, topBarHeight, '', 'special12', '0xFFFFFFFF')
         self.addControl(self.nowPlayingFrame)
         self.nowPlayingFrame.setLabel('Welcome to Mike\'s daft juukbox... YTRB')
 
-        self.qRemFrame = xbmcgui.ControlLabel(listLeftSelector + listWidth / 2, 33, listWidth / 2, topBarHeight, '', 'special12', '0xFFFFFFFF')
+        self.qRemFrame = xbmcgui.ControlLabel(listLeftSelector , 33, listWidth, topBarHeight, '', 'special12', '0xFFFFFFFF')
         self.addControl(self.qRemFrame)
         self.qRemFrame.setLabel('Remaining: '+str(self.queueMax)+' songs.' )
 
@@ -314,7 +315,7 @@ class MDJClass(xbmcgui.Window):
 
     def qRemaining(self) :
         self.queueRemain = self.queueMax - len(self.userQueuedSongs)
-        self.qRemFrame.setLabel('  Remaining: ' + str(self.queueRemain) + ' songs.' )
+        self.qRemFrame.setLabel('Remaining: ' + str(self.queueRemain) + ' songs.' )
 
     def fixQueueWindow(self) :
         self.queueList.reset()
