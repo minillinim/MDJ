@@ -1,3 +1,4 @@
 <settings>
    <setting id="music_root" type="folder" label="MUSIC ROOT" default="c:\"/>
+   <setting id="queue_max" type="text" label="QUEUE MAX" default="15"/>
 </settings>

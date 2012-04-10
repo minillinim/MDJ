@@ -51,7 +51,7 @@ class MDJClass(xbmcgui.Window):
         #
         Addon = xbmcaddon.Addon( id=__plugin__)
         self.musicRoot = Addon.getSetting('music_root')    # point this at the root of your party music
-        self.queueMax = 8                                  # no more than this many in the queue
+        self.queueMax = int(Addon.getSetting('queue_max'))    # Max number of songs in the queue
         self.bgimg = os.path.join(Addon.getAddonInfo('path'),'images','skin.png')
         
         #

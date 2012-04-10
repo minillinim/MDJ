@@ -2,48 +2,47 @@ MDJ - Mike's daft jukebox.
 
 Implements a pretty basic jukebox script for XBMC. 
 
-Please Note: This is not a finished project. It's been developed to work at a few friends weddings so some of the features are somewhat hard coded. YMMV... :)
+Please Note: This is not a finished project. It's been developed to work at a few friends weddings and it seems to work well enough.
 
-First, find out where the addons should be installed to. On windows this should be C:\Program Files\XBMC\addons, on linux try ~/.xbmc/addons
+Tested on EDEN.
 
-In there, there should be a folder called script.MDJ and within that, a file called MDJ.py. open this file
+First, you'll need to update some settings for the plugin. Most importantly, the music root. For this plug in to work correctly you should have a directory structure like: (on windows)
 
-There are only three things you need to look at and they are all in this section:
+    C:
+        stuff
+            blah
+                blah
+                    WEDDING_MUSIC
+                        PLAYLIST_1
+                            song1.mp3
+                            song2.mp3
+                            song3.mp3
+                            song4.mp3
+                            ...
+                        PLAYLIST_2
+                            song1.mp3
+                            song2.mp3
+                            song3.mp3
+                            song4.mp3
+                            ...
+                        ...
 
-        #
-        # Some global variables
-        #
-        self.musicRoot = '/home/uqmimelf/LEISURE/MUSIC/'    # Point this at the root of your party music
-        self.queueMax = 8                                   # No more than this many in the queue
-        self.bgimg = os.path.join(os.getcwd(),'images','skin.png') # Location of the background image
-       
 
-1. Change the Music root.
+So I'm assuming that you've selected a set of party songs for th night and you've arranged them in folders according to
+different "playlists"
 
-     You should have a directory structure like: (on windows)
+If so, your music root should be set to: 'C:\stuff\blah\blah\WEDDING_MUSIC'
 
-   C:\stuff\blah\blah\WEDDING_MUSIC
-                                 PLAYLIST_1
-                                        song1.mp3
-                                        song2.mp3
-                                        song3.mp3
-                                        song4.mp3
-                                 PLAYLIST_2
-                                        song1.mp3
-                                        song2.mp3
-                                        song3.mp3
-                                        song4.mp3
+When you start MDJ you'll get a choice of PLAYLIST_1, PLAYLIST_2 etc... and the the songs will load under that. 
 
-Then your music root should look like:
+By default, the queue max is set to 15 songs, you can chancge this in the settings too. 15 is is a good amount I think, more than 15 and the queue might not fit on the screen properly.
 
-self.musicRoot = 'C:\stuff\blah\blah\WEDDING_MUSIC'
-
-When you start MDJ you'll get a choice of PLAYLIST_1, PLAYLIST_2 etc...
-
-2. update queue max. No larger than 15. 15 is what was at marnines, erica reckons it should be less, more than 15 and the queue won;t fit on the screen.
-
-3. You can modify skin.png in paint or whatever. it's just an image which is splashed onto the background. The one provided is just for an example. May I recommend colorbrewer2.org if you are trying to choose non-clashing colours.
+Finally, you can modify skin.png in paint or whatever. It's just an image which is splashed onto the background. The one provided is just for an example. May I recommend colorbrewer2.org if you are trying to choose non-clashing colours.
+The png file can be found in the images directory of this scripts folder.
 
 Once you have set it up, go from the front page of XBMC -> programs and MDJ should just be there. Use your mouse to choose songs, use escape on the keyboard to exit.
-You will need to disable the screensaver in both XBMC and Windows and hide the keyboard on the night. Once you're in MDJ, no one can skip, no one can touch the volume. Use Escape to exit MDJ and then go back in to restart with a new playlist. It may sometimes crash XBMC when you exit / reenter but I haven't seen it crash during playback.
+
+NOTE: You will need to disable the screensaver in both XBMC and Windows and hide the keyboard on the night. Once you're in MDJ, no one can skip, no one can touch the volume. Use Escape to exit MDJ and then go back in to restart with a new playlist.
+
+It may sometimes crash XBMC when you exit / reenter but I haven't seen it crash during playback.
 
