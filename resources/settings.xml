@@ -1,0 +1,3 @@
+<settings>
+   <setting id="music_root" type="folder" label="MUSIC ROOT" default="c:\"/>
+</settings>
