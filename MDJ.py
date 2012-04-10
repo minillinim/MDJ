@@ -22,12 +22,19 @@
 #
 import xbmc
 import xbmcgui
+import xbmcaddon
 import re
 import sys
 import os
 import random
 import time
 from threading import Thread
+
+# plugin constants
+__plugin__ = "script.MDJ"
+__author__ = "minillinim"
+__url__ = "https://github.com/minillinim/MDJ"
+__version__ = "0.0.1"
 
 #get actioncodes from keymap.xml
 ACTION_PREVIOUS_MENU = 10
@@ -41,9 +48,10 @@ class MDJClass(xbmcgui.Window):
         # 
         # Some global variables
         #
-        self.musicRoot = '/home/uqmimelf/LEISURE/MUSIC/'    # point this at the root of your party music
+        Addon = xbmcaddon.Addon( id=__plugin__)
+        self.musicRoot = 'C:\Users\minillinim\Desktop\TEST'    # point this at the root of your party music
         self.queueMax = 8                                  # no more than this many in the queue
-        self.bgimg = os.path.join(os.getcwd(),'images','skin.png')
+        self.bgimg = os.path.join(Addon.getAddonInfo('path'),'images','skin.png')
         
         #
         # get and parse the global window dimensions
@@ -72,7 +80,7 @@ class MDJClass(xbmcgui.Window):
         self.addControl(self.backgroundImage)
 
         # add the nowPlaying and queue count labels to the top of the screen
-        self.nowPlayingFrame = xbmcgui.ControlLabel(listLeftQueue, 33, listWidth * 1.5, topBarHeight, '', 'special12', '0xFFFFFFFF')
+        self.nowPlayingFrame = xbmcgui.ControlLabel(listLeftQueue, 33, listWidth * 2, topBarHeight, '', 'special12', '0xFFFFFFFF')
         self.addControl(self.nowPlayingFrame)
         self.nowPlayingFrame.setLabel('Welcome to Mike\'s daft juukbox... YTRB')
 
@@ -176,12 +184,12 @@ class MDJClass(xbmcgui.Window):
         self.selectorList.reset()
 
         # get a list of all the songs...
-        self.currentPlayingDirectory = self.musicRoot + directory + '\\'
+        self.currentPlayingDirectory = os.path.join(self.musicRoot, directory)
         tmpList = os.listdir(self.currentPlayingDirectory)
         sortedSongList = []
         for fileName in tmpList :
             prettyName = self.prettyFyFile(fileName)
-            longFileName = self.currentPlayingDirectory + fileName
+            longFileName = os.path.join(self.currentPlayingDirectory, fileName)
             self.pretty2LongDict[prettyName] = longFileName
             self.long2PrettyDict[longFileName] = prettyName
             sortedSongList.append(prettyName)
