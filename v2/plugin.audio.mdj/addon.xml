@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.audio.mdj" name="Mikes daft jukebox" version="0.0.2" provider-name="Mike Imelfort">
+  <requires>
+    <import addon="xbmc.python" version="2.1.0"/>
+    <import addon="xbmc.gui" version="4.0.0"/>
+  </requires>
+  <extension point="xbmc.addon.audio" library="mdj.py">
+    <provides>audio</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en">A very simple jukbox plugin based on playlists.</summary>
+    <description lang="en">This addon loads playlists and then allows users to play songs like a traditional jukebox, but wth more features.</description>
+    <disclaimer lang="en">It's not my fault if you use this to play bad music!</disclaimer>
+    <language></language>
+    <platform>all</platform>
+    <license>GNU GENERAL PUBLIC LICENCE version 3</license>
+    <forum></forum>
+	<website>https://github.com/minillinim/MDJ</website>
+    <email>mike@mikeimelfort.com</email>
+    <source></source>
+  </extension>
+</addon>
