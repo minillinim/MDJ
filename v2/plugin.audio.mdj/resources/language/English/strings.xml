@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<strings>
+    <string id="32101">MDJ global settings</string>
+    <string id="32111">Maximum items in the queue</string>
+	<string id="32112">Root playlist directory</string>
+	<string id="32113">Path to background image</string>
+	<string id="32114">Master password</string>
+    <string id="32115">Replay wait for user-selected songs (minutes)</string>
+    <string id="32116">Replay wait for auto-selected songs (minutes)</string>
+</strings>
