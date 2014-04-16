@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="32101">
+	    <setting label="32111" type="slider" id="queue_max" default="15" range="1,1,50" option="int"/>
+	    <setting label="32112" type="folder" id="music_root" default="/home/uqmimelf/leisure/music/primus"/>
+	    <setting label="32113" type="file" id="bg_img" default="images/skin.png"/>
+	    <setting label="32114" type="text" id="password" default="mikeisboss"/>
+        <setting label="32115" type="slider" id="user_embargo" default="600" range="1,1,600" option="int"/>
+        <setting label="32116" type="slider" id="auto_embargo" default="0" range="1,1,600" option="int"/>
+	</category>
+</settings>
