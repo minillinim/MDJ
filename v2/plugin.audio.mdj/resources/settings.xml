@@ -1,11 +1,22 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
     <category label="32101">
-	    <setting label="32111" type="slider" id="queue_max" default="15" range="1,1,50" option="int"/>
-	    <setting label="32112" type="folder" id="music_root" default="/home/uqmimelf/leisure/music/primus"/>
-	    <setting label="32113" type="file" id="bg_img" default="images/skin.png"/>
-	    <setting label="32114" type="text" id="password" default="mikeisboss"/>
-        <setting label="32115" type="slider" id="user_embargo" default="600" range="1,1,600" option="int"/>
-        <setting label="32116" type="slider" id="auto_embargo" default="0" range="1,1,600" option="int"/>
-	</category>
+        <setting label="32111" type="folder" id="music_root" default="/home/uqmimelf/leisure/music/primus"/>
+	    <setting label="32112" type="slider" id="queue_max" default="15" range="1,1,50" option="int"/>
+        <setting label="32113" type="slider" id="page_size" default="5" range="1,1,10" option="int"/>
+        <setting label="32114" type="slider" id="user_embargo" default="600" range="1,1,600" option="int"/>
+        <setting label="32115" type="slider" id="auto_embargo" default="0" range="1,1,600" option="int"/>
+    </category>
+    <category label="32201">
+        <setting label="32211" type="file" id="skin_dir" default="resources/skins/shiny"/>
+        <setting label="32212" type="file" id="test_skin" default="resources/skins/resTest"/>
+    </category>
+    <category label="32301">
+        <setting label="32311" type="slider" id="w_fudge" default="66" range="-500,1,500" option="int"/>
+        <setting label="32312" type="slider" id="h_fudge" default="66" range="-500,1,500" option="int"/>
+        <setting label="32313" type="file" id="cog_img" default="resources/icons/cog.png"/>
+        <setting label="32314" type="file" id="play_img" default="resources/icons/play.png"/>
+        <setting label="32315" type="file" id="res_img" default="resources/icons/res.png"/>
+    </category>
+
 </settings>

@@ -33,6 +33,7 @@ from threading import Thread, Lock
 from UserDict import UserDict
 import urllib
 import urlparse
+import Image
 
 # point at the local python modules
 sys.path.append(os.path.join(os.path.split(os.path.realpath(__file__))[0], "resources","lib","mp3test"))
@@ -77,9 +78,11 @@ def alert(title, message="", time=5000):
 def build_url(query):
     return base_url + '?' + urllib.urlencode(query)
 
+print sys.argv
 base_url = sys.argv[0]
 addon_handle = int(sys.argv[1])
 args = urlparse.parse_qs(sys.argv[2][1:])
+imageDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'images') # where we keep images
 
 ###############################################################################
 
@@ -97,30 +100,88 @@ args = urlparse.parse_qs(sys.argv[2][1:])
 
 class Juukbox(xbmcgui.Window):
     """Handle all the nitty gritties about the skin and the way it looks"""
-    def __init__(self, doSettings=False):
+    def __init__(self, mode="juukbox"):
         """Basic setup, window is a MDJ (xbmc.Window)"""
-        # load settings
-        # adjust these settings in settings.xml
-        if doSettings:
+        self.backgroundImage = None
+        self.scaleX = 0.
+        self.scaleY = 0.
+        self.screenX = 0.
+        self.screenY = 0.
+        self.mode = mode
+
+        #------------------------------------------------------
+        # If called in "settings" mode -> adjust these settings in settings.xml and quit
+        if self.mode == "settings":
             __addon__.openSettings()
             sys.exit()
-        self.musicRoot = __addon__.getSetting('music_root')       # where the music is at bra!
-        self.queueMax = int(__addon__.getSetting('queue_max'))    # max number of items in the queue
-        self.userEmbargo = int(__addon__.getSetting('user_embargo'))* 60    # number of seconds that must be waited until we can replay an item (user-selected)
-        self.autoEmbargo = int(__addon__.getSetting('auto_embargo'))* 60    # number of seconds that must be waited until we can replay an item (autoqueued)
-        self.queueMax = int(__addon__.getSetting('queue_max'))    # max number of items in the queue
 
-        # these two variables need to be made thread safe
-        self.playerRequired = True          # do we need the player thread to keep going?
-        self.playerActive = False           # is the player thread still active
+        #------------------------------------------------------
+        # If called in "testRes" mode -> show the user the resolution adjustment background image
+        elif self.mode == "resTest":
+            self.fudgeResolution()
+            self.renderTestSKin()
 
-        self.nowPlayingFrame = None
-        self.qRemFrame = None
-        self.queueList = None
-        self.selectorList = None
-        self.bgimg = None
+        #------------------------------------------------------
+        # Otherwise, we're a juukbox
+        else:
+            self.musicRoot = __addon__.getSetting('music_root')                        # where the music is at bra!
+            self.queueMax = int(float(__addon__.getSetting('queue_max')))              # max number of items in the queue
+            self.userEmbargo = int(float(__addon__.getSetting('user_embargo')))* 60    # number of seconds that must be waited until we can replay an item (user-selected)
+            self.autoEmbargo = int(float(__addon__.getSetting('auto_embargo')))* 60    # number of seconds that must be waited until we can replay an item (autoqueued)
+            self.pageSize = int(float(__addon__.getSetting('page_size')))              # page up / down size
 
-        self.playerLock = Lock()
+            # handle the nitty gritty of lists and queues
+            self.SM = SongManager(self.musicRoot,
+                                  self.queueMax,
+                                  self.userEmbargo,
+                                  self.autoEmbargo,
+                                  self.pageSize)
+
+            # We need to know when to kill threads and quit
+            self.playerLock = Lock()            # the next two variables need to be made thread safe
+            self.playerRequired = True          # do we need the player thread to keep going?
+            self.playerActive = False           # is the player thread still active
+
+            #------------------------------------------------------
+            # skin related stuff
+            self.topBand = None                 # band that runs across the top where "now playing" is located
+            self.cornerImg = None               # image displayed in the top right corner which holds the number remaining
+            self.remainingImg = None            # an image of a number showing how many remain to be added to the queue
+            self.nowImg = None                  # an image which says "Now Playing"
+            self.selectGhost = None             # opaque background for the select list
+            self.queueGhost = None              # opaque background for the queue list
+            self.backgroundTiles = []           # Images to be tiled on the background
+            self.tilingPattern = [1,1]          # how many tiles to add to the background (X x Y)
+            self.queueList = None
+            self.selectorList = None
+            self.nowPlayingFrame = None
+
+            # kill these
+            self.qRemFrame = None
+            self.backgroundImage = None
+
+            # now set up all the parts
+            self.initialiseJuukbox()
+    #------------------------------------------------------
+    # resolution crud
+    #
+    def fudgeResolution(self):
+        """Get the fudge factor and adjust the x/y coords"""
+        self.scaleX = 1. + float(__addon__.getSetting('w_fudge'))/1000.
+        self.scaleY = 1. + float(__addon__.getSetting('h_fudge'))/1000.
+        self.screenX = int(self.getWidth() / self.scaleX)
+        self.screenY = int(self.getHeight() / self.scaleY)
+
+    def renderTestSKin(self):
+        """Render the resolution test skin"""
+        self.backgroundImage = xbmcgui.ControlImage(0,
+                                                    0,
+                                                    self.screenX,
+                                                    self.screenY,
+                                                    os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('rt_bg_img')),
+                                                    aspectRatio=0)
+
+        self.addControl(self.backgroundImage)
 
     #------------------------------------------------------
     # jukebox functionality
@@ -130,9 +191,7 @@ class Juukbox(xbmcgui.Window):
         self.createSkin()
         self.SM.loadMusicList()
         # Draw the skin for the first time
-        self.setFocus(self.selectorList)
         self.reRender()
-        self.selectorList.selectItem(2)
         self.alert('Welcome to Mike\'s daft juukbox... YTRB')
         self.startJuukbox()
 
@@ -141,37 +200,37 @@ class Juukbox(xbmcgui.Window):
 
         Edit here to "skin" the juukbox
         """
-        screenX = self.getWidth()
-        screenY = self.getHeight()
-        border = 14                # fixed border for all rendered objects
+        self.fudgeResolution()
+
+        v_border = 30                # fixed border for all rendered objects ( vertical )
+        h_border = 14                # fixed border for all rendered objects ( horizontal )
         top_bar_height = 60        # the height of the top bar
-        list_top = 105             # the top height of the lists
-        list_width = int((screenX - (3. * border)) / 2.)
-        list_height = screenY - list_top - border
-        list_left_queue = border
-        list_left_selector = int(2. * border + list_width)
-        self.bgimg = os.path.join(os.path.dirname(os.path.realpath(__file__)),  # uri of background image
-                                  __addon__.getSetting('bg_img'))
+        list_width = int((self.screenX - (3. * h_border)) / 2.)
+        list_height = int(self.screenY - top_bar_height - (3. * v_border))
+        list_top = int((2. * v_border) + top_bar_height)
 
-        self.imageDir = os.path.join(os.path.dirname(os.path.realpath(__file__)),  # uri of background image
-                                     'images')
-
+        list_left_queue = h_border
+        list_left_selector = int((2. * h_border) + list_width)
 
         # add a background image
-        self.backgroundImage = xbmcgui.ControlImage(0,0,screenX,screenY,self.bgimg)
-        self.addControl(self.backgroundImage)
+        self.backgroundImage = xbmcgui.ControlImage(0,
+                                                    0,
+                                                    self.screenX,
+                                                    self.screenY,
+                                                    os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('df_bg_img')),
+                                                    aspectRatio=0)
 
         # add the nowPlaying and queue count frames to the top of the screen
         self.nowPlayingFrame = xbmcgui.ControlLabel(list_left_queue,
-                                                    33,
+                                                    v_border,
                                                     list_width,
                                                     top_bar_height,
                                                     '',
                                                     'special12',
-                                                    '0xFFFFFFFF'
+                                                    '0xFFFFFFFF',
                                                     )
         self.qRemFrame = xbmcgui.ControlLabel(list_left_selector,
-                                              33,
+                                              v_border,
                                               list_width,
                                               top_bar_height,
                                               '',
@@ -190,15 +249,11 @@ class Juukbox(xbmcgui.Window):
                                                 list_top,
                                                 list_width,
                                                 list_height,
-                                                buttonFocusTexture=os.path.join(self.imageDir,"button-focus.png"),
-                                                buttonTexture=os.path.join(self.imageDir,"button-no-focus.png")
+                                                buttonFocusTexture=os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('df_bf_img')),
+                                                font='special16',
                                                 )
-
-        self.SM = SongManager(self.musicRoot,
-                              self.queueMax,
-                              self.userEmbargo,
-                              self.autoEmbargo)
-
+        # anchor these guys to the window
+        self.addControl(self.backgroundImage)
         self.addControl(self.nowPlayingFrame)
         self.addControl(self.qRemFrame)
         self.addControl(self.queueList)
@@ -206,15 +261,11 @@ class Juukbox(xbmcgui.Window):
 
     def startJuukbox(self):
         """let's get this show on the road"""
-        # focus on the selector list
-        self.setFocus(self.selectorList)
-
         # put the playlist manager on it's own thread
         self.managerThread = Thread(target=self.managePlaylist)
         self.managerThread.start()
-
-        # fix the queus window
-        self.renderQueueWindow()
+        self.reRender()
+        self.centerSelectorAt()
 
     def stopJuukbox(self):
         """exit like a nice script"""
@@ -228,6 +279,13 @@ class Juukbox(xbmcgui.Window):
             with self.playerLock:
                 if not self.playerActive:
                     break
+            time.sleep(2)
+
+        del self.nowPlayingFrame
+        del self.qRemFrame
+        del self.queueList
+        del self.selectorList
+
         self.close()
 
     def onAction(self, action):
@@ -236,26 +294,61 @@ class Juukbox(xbmcgui.Window):
         use overrides in \ keymap.xml and try do some other tricky stuff
         We won't try to catch the use of select on the selector list
         we will handle that in it's own place"""
-        if action.getId() == 92:
-            self.stopJuukbox()
+
+        #print "ACT: %d" % action.getId()
+
+        if self.mode == 'resTest':
+            if action.getId() == 92:
+                self.close()
+
+        elif self.mode == 'juukbox':
+            if action.getId() == 92:
+                self.stopJuukbox()
+
+            # skip alpha
+            elif action.getId() == 58:
+                self.centerSelectorAt(self.SM.getNextAlphaPos(self.selectorList.getSelectedPosition(), direction='reverse'))
+            elif action.getId() == 59:
+                self.centerSelectorAt(self.SM.getNextAlphaPos(self.selectorList.getSelectedPosition(), direction='forward'))
+
+            # skip artist
+            elif action.getId() == 60:
+                self.centerSelectorAt(self.SM.getNextArtistPos(self.selectorList.getSelectedPosition(), direction='reverse', page=True))
+            elif action.getId() == 61:
+                self.centerSelectorAt(self.SM.getNextArtistPos(self.selectorList.getSelectedPosition(), direction='reverse'))
+            elif action.getId() == 62:
+                self.centerSelectorAt(self.SM.getNextArtistPos(self.selectorList.getSelectedPosition(), direction='forward'))
+            elif action.getId() == 63:
+                self.centerSelectorAt(self.SM.getNextArtistPos(self.selectorList.getSelectedPosition(), direction='forward', page=True))
+
+            # skip album
+            elif action.getId() == 64:
+                self.centerSelectorAt(self.SM.getNextAlbumPos(self.selectorList.getSelectedPosition(), direction='reverse', page=True))
+            elif action.getId() == 65:
+                self.centerSelectorAt(self.SM.getNextAlbumPos(self.selectorList.getSelectedPosition(), direction='reverse'))
+            elif action.getId() == 66:
+                self.centerSelectorAt(self.SM.getNextAlbumPos(self.selectorList.getSelectedPosition(), direction='forward'))
+            elif action.getId() == 67:
+                self.centerSelectorAt(self.SM.getNextAlbumPos(self.selectorList.getSelectedPosition(), direction='forward', page=True))
 
     def onControl(self, control):
         """When making selections"""
-        if control == self.selectorList:
-            # someone clicked a song
-            pos = self.selectorList.getSelectedPosition()
-            if self.SM.enqueueSong(pos):
-                with self.playerLock:
-                    self.playerActive = True
-                time.sleep(0.5)
-                self.reRender()
-                pos -= 1
-                self.centerSelectorAt(pos)
+        if self.mode == 'juukbox':
+            if control == self.selectorList:
+                # someone clicked a song
+                pos = self.selectorList.getSelectedPosition()
+                if self.SM.enqueueSong(pos):
+                    with self.playerLock:
+                        self.playerActive = True
+                    time.sleep(0.5)
+                    self.reRender()
+                    self.centerSelectorAt(pos-1)
 
     def managePlaylist(self):
         """play the next item!"""
         keep_going = True
-        while(keep_going):
+        sleep_time = 2
+        while keep_going:
             # see if we've been asked to leave...
             with self.playerLock:
                 if self.playerActive: # wait for the user to catch up...
@@ -269,7 +362,11 @@ class Juukbox(xbmcgui.Window):
                         xbmc.Player().play(song_url)
                         # redraw the queued list of items
                         self.renderNowPlaying(song_title)
-                        self.reRender()
+                        self.renderQueueWindow()
+                        self.renderQRemaining()
+
+            if keep_going:
+                time.sleep(2)
 
         # make sure that the player is stopped before we leave here...
         xbmc.Player().stop()
@@ -325,12 +422,12 @@ class Juukbox(xbmcgui.Window):
         else:
             return pos + jump_2_middle
 
-    def centerSelectorAt(self, pos):
+    def centerSelectorAt(self, pos=0):
         """Take care of centering the selector at a given position"""
-        if pos < 0:
-            pos = 0
-        #if pos >= self.selectorList.size():
-        #    pos = self.selectorList.size()-1
+        if pos <= 0:
+            pos = 3
+        if pos >= self.selectorList.size():
+            pos = self.selectorList.size()-1
         self.selectorList.selectItem(self.getFocusPos(pos))
         self.selectorList.selectItem(pos)
 
@@ -339,6 +436,7 @@ class Juukbox(xbmcgui.Window):
         self.renderSelectionWindow()
         self.renderQueueWindow()
         self.renderQRemaining()
+        self.setFocus(self.selectorList)
 
 ###############################################################################
 ###############################################################################
@@ -351,12 +449,14 @@ class SongManager(object):
                  musicRoot,
                  queueMax,
                  userEmbargo,
-                 autoEmbargo):
+                 autoEmbargo,
+                 pageSize):
 
         # take care of the passed variables
         self.musicRoot = musicRoot
         self.queueMax = queueMax
         self.embargoDelay = {'user' : userEmbargo, 'auto':  autoEmbargo}
+        self.pageSize = pageSize
 
         # Set the state and path variables
         self.userLock = 'unlocked'          # The system starts in a state of being unlocked
@@ -377,6 +477,10 @@ class SongManager(object):
 
         self.position2Fid = {}              # position in the selection list -> fid
         self.position2Type = {}             # same but to type
+
+        self.positionAlpha = []            # [pos, pos, ...] of all the alphabets
+        self.positionArtist = []
+        self.positionAlbum = []
 
     def loadMusicList(self):
         """get the contents of a media directory and load it into the autoQ"""
@@ -429,20 +533,118 @@ class SongManager(object):
     def getAvailable(self):
         """work out which items we are able to give as selection options"""
         ret_list = []
+        # clear these guys
+        self.positionAlpha = []            # [pos, pos, ...] of all the alphabets
+        self.positionArtist = []
+        self.positionAlbum = []
+        self.position2Fid = {}
+        self.position2Type = {}
+
         pos = 0
+        curr_time = time.time()
         for (type, fid, text) in self.ST.getDisplay():
             if type == 'title':
-                if not self.isEmbargoed(fid):
+                if not self.isEmbargoed(fid, currTime=curr_time):
                     ret_list.append(text)
                     self.position2Fid[pos] = fid
                     self.position2Type[pos] = type
                     pos += 1
             else:
+                # set these guys up for quick navigation
+                if type == 'alpha':
+                    self.positionAlpha.append(pos)
+                if type == 'artist':
+                    self.positionArtist.append(pos)
+                if type == 'album':
+                    self.positionAlbum.append(pos)
+
                 ret_list.append(text)
                 self.position2Type[pos] = type
                 pos += 1
 
         return ret_list
+
+    def getNextAlphaPos(self, pos, direction='forward'):
+        """Return the position of the next alphabet sep"""
+        length = len(self.positionAlpha)
+        r = range(length)
+        if direction == 'forward':
+            for i in r:
+                if self.positionAlpha[i] >= pos:
+                    if i + 1 < length:
+                        return self.positionAlpha[i + 1]
+                    else:
+                        return self.positionAlpha[0]
+            return self.positionAlpha[0]
+        else:
+            r.reverse()
+            for i in r:
+                if self.positionAlpha[i] <= pos:
+                    if i - 1 >= 0:
+                        return self.positionAlpha[i - 1]
+                    else:
+                        return self.positionAlpha[length-1]
+            return self.positionAlpha[length-1]
+
+    def getNextArtistPos(self, pos, page=False, direction='forward'):
+        """Return the position of the next album sep"""
+        length = len(self.positionArtist)
+        r = range(length)
+        if direction == 'forward':
+            for i in r:
+                if self.positionArtist[i] >= pos:
+                    if page:
+                        goto = i + self.pageSize
+                    else:
+                        goto = i + 1
+                    if goto < length:
+                        return self.positionArtist[goto]
+                    else:
+                        return self.positionArtist[0]
+            return self.positionArtist[0]
+        else:
+            r.reverse()
+            for i in r:
+                if self.positionArtist[i] <= pos:
+                    if page:
+                        goto = i - self.pageSize
+                    else:
+                        goto = i - 1
+                    if goto >= 0:
+                        return self.positionArtist[goto]
+                    else:
+                        return self.positionArtist[length-1]
+            return self.positionArtist[length-1]
+
+    def getNextAlbumPos(self, pos, page=False, direction='forward'):
+        """Return the position of the next artist sep"""
+        length = len(self.positionAlbum)
+        r = range(length)
+        if direction == 'forward':
+            for i in r:
+                if self.positionAlbum[i] >= pos:
+                    if page:
+                        goto = i + self.pageSize
+                    else:
+                        goto = i + 1
+                    if goto < length:
+                        return self.positionAlbum[goto]
+                    else:
+                        return self.positionAlbum[0]
+            return self.positionAlbum[0]
+        else:
+            r.reverse()
+            for i in r:
+                if self.positionAlbum[i] <= pos:
+                    if page:
+                        goto = i - self.pageSize
+                    else:
+                        goto = i - 1
+                    if goto >= 0:
+                        return self.positionAlbum[goto]
+                    else:
+                        return self.positionAlbum[length-1]
+            return self.positionAlbum[length-1]
 
     def getEnqueued(self):
         """get the list of currently enqueued items"""
@@ -466,13 +668,14 @@ class SongManager(object):
                 self.autoQ.append(fid)
         return self.getDisplayName(fid, getURL=True)
 
-    def isEmbargoed(self, fid):
+    def isEmbargoed(self, fid, currTime=0):
         """check to see if there is any reason to make this item unavailable"""
+        if currTime == 0:
+            currTime = time.time()
         try:
             # see if this guy is embargoed
             (type, last_time) = self.itemLastPlayed[fid]
-            curr_time = time.time()
-            since = curr_time - last_time
+            since = currTime - last_time
             embargo_limit = self.embargoDelay[type]
             if since > embargo_limit:
                 # remove from the list
@@ -484,11 +687,11 @@ class SongManager(object):
             # no problem
             return False
 
-    def reviewEmbargoed(self, fid):
+    def reviewEmbargoed(self):
         """check to see if any unavailable songs can be re-enlisted"""
+        curr_time = time.time()
         to_remove = []
         for fid, (type, last_time) in self.itemLastPlayed.items():
-            curr_time = time.time()
             since = curr_time - last_time
             embargo_limit = self.embargoDelay[type]
             if since > embargo_limit:
@@ -496,7 +699,6 @@ class SongManager(object):
         for fid in to_remove:
             # remove from the list
             del(self.itemLastPlayed[fid])
-
         return len(to_remove)
 
     def getDisplayName(self, fid, getURL=False):
@@ -512,7 +714,7 @@ class SongManager(object):
 ###############################################################################
 
 class SongTree(object):
-    """Object for storing songs that makes updating lists and searchig more efficient"""
+    """Object for storing songs that makes updating lists and searching more efficient"""
     def __init__(self):
         self.alphas = ['#'] + [chr(i) for i in range(65,91)]
         self.alphaHash = {}
@@ -535,15 +737,23 @@ class SongTree(object):
         except KeyError:
             alpha_hash[artist] = { album : { title : fid } }  # add the whole thing in one go
 
-    def getDisplay(self): # this is a generator function
-        """get display names for the songs + separators"""
-        title = (None, "No songs available")
+    def getDisplay(self):
+        """get display names for the songs + separators
+
+        This is a generator function:
+        yields: (type, fid, display) where type is from:
+            None, 'alpha', 'artist', 'album' and 'title'
+        """
+
+        title = (None, None, "No songs available")
         ret_alpha_sep = True
         alpha_index = 0
         alpha = self.alphas[alpha_index]
         done = False
         ret_artist_sep = True
         next_artist_found = False
+
+        # buffer the first alpha
         while not next_artist_found:
             alpha_index += 1
             try:
@@ -556,6 +766,7 @@ class SongTree(object):
                 break
 
         if not done:
+            # buffer the first artist, album, title
             artist_index = 0
             artist_list = sorted(self.alphaHash[alpha].keys())
             artist = artist_list[artist_index]
@@ -632,29 +843,35 @@ class SongTree(object):
 ###############################################################################
 
 mode = args.get('mode', None)
-
+print mode
 if mode is None:
+    # this is the pre-juukbox window which allows you to edit settings etc...
+
+    # normal mode
     url = build_url({'mode': 'juukbox'})
-    li = xbmcgui.ListItem('Start Juukbox')
+    li = xbmcgui.ListItem('Start Juukbox',
+                          iconImage=os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('play_img')))
     xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li)
+
+    # settings mode
     url = build_url({'mode': 'settings'})
-    li = xbmcgui.ListItem('Edit Settings')
+    li = xbmcgui.ListItem('Edit Settings',
+                          iconImage=os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('cog_img')))
     xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li)
+
+    # resolution mode
+    url = build_url({'mode': 'resTest'})
+    li = xbmcgui.ListItem('Adjust Resolution',
+                          iconImage=os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('res_img')))
+    xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li)
+
+
     xbmc.executebuiltin('Container.SetViewMode(%d)' % 500)
     xbmcplugin.endOfDirectory(addon_handle)
-elif mode[0] == 'juukbox':
-    # make it all run!
-    juukbox = Juukbox()
-    juukbox.initialiseJuukbox()
-    juukbox.doModal()
-    try:
-        del juukbox
-    except:
-        pass
-elif mode[0] == 'settings':
-    # make it all run!
-    juukbox = Juukbox(doSettings=True)
-    juukbox.initialiseJuukbox()
+
+else:
+    # Run the juukbox
+    juukbox = Juukbox(mode=mode[0])
     juukbox.doModal()
     try:
         del juukbox

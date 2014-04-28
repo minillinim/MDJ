@@ -1,10 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <strings>
-    <string id="32101">MDJ global settings</string>
-    <string id="32111">Maximum items in the queue</string>
-	<string id="32112">Root playlist directory</string>
-	<string id="32113">Path to background image</string>
-	<string id="32114">Master password</string>
-    <string id="32115">Replay wait for user-selected songs (minutes)</string>
-    <string id="32116">Replay wait for auto-selected songs (minutes)</string>
+
+    <string id="32101">Juukbox settings</string>
+
+    <string id="32111">Root playlist directory</string>
+    <string id="32112">Page up/down size</string>
+    <string id="32113">Maximum items in the queue</string>
+    <string id="32114">Replay wait for user-selected songs (minutes)</string>
+    <string id="32115">Replay wait for auto-selected songs (minutes)</string>
+
+    <string id="32201">SKin settings</string>
+
+    <string id="32211">Path to current usable skin</string>
+    <string id="32212">Path to current test skin</string>
+
+    <string id="32301">System settings</string>
+
+    <string id="32311">Screen width fudge</string>
+    <string id="32312">Screen height fudge</string>
+    <string id="32313">Settings icon</string>
+    <string id="32314">Start Juukbox icon</string>
+    <string id="32315">Set resolution icon</string>
+
 </strings>
