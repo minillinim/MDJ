@@ -4,15 +4,16 @@
     <string id="32101">Juukbox settings</string>
 
     <string id="32111">Root playlist directory</string>
-    <string id="32112">Page up/down size</string>
-    <string id="32113">Maximum items in the queue</string>
+    <string id="32112">Maximum items in the queue</string>
+    <string id="32113">Page up/down size</string>
     <string id="32114">Replay wait for user-selected songs (minutes)</string>
     <string id="32115">Replay wait for auto-selected songs (minutes)</string>
 
-    <string id="32201">SKin settings</string>
+    <string id="32201">Skin settings</string>
 
     <string id="32211">Path to current usable skin</string>
-    <string id="32212">Path to current test skin</string>
+    <string id="32212">Percentage of screen used to display status</string>
+    <string id="32213">Path to current test skin</string>
 
     <string id="32301">System settings</string>
 

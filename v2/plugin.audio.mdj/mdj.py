@@ -34,6 +34,8 @@ from UserDict import UserDict
 import urllib
 import urlparse
 import Image
+import math
+from random import randint
 
 # point at the local python modules
 sys.path.append(os.path.join(os.path.split(os.path.realpath(__file__))[0], "resources","lib","mp3test"))
@@ -102,7 +104,6 @@ class Juukbox(xbmcgui.Window):
     """Handle all the nitty gritties about the skin and the way it looks"""
     def __init__(self, mode="juukbox"):
         """Basic setup, window is a MDJ (xbmc.Window)"""
-        self.backgroundImage = None
         self.scaleX = 0.
         self.scaleY = 0.
         self.screenX = 0.
@@ -118,17 +119,24 @@ class Juukbox(xbmcgui.Window):
         #------------------------------------------------------
         # If called in "testRes" mode -> show the user the resolution adjustment background image
         elif self.mode == "resTest":
+            # load the correct skin
+            self.skinDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('test_skin_dir'))
+
             self.fudgeResolution()
             self.renderTestSKin()
 
         #------------------------------------------------------
         # Otherwise, we're a juukbox
         else:
+            # load the correct skin
+            self.skinDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('skin_dir'))
             self.musicRoot = __addon__.getSetting('music_root')                        # where the music is at bra!
             self.queueMax = int(float(__addon__.getSetting('queue_max')))              # max number of items in the queue
             self.userEmbargo = int(float(__addon__.getSetting('user_embargo')))* 60    # number of seconds that must be waited until we can replay an item (user-selected)
             self.autoEmbargo = int(float(__addon__.getSetting('auto_embargo')))* 60    # number of seconds that must be waited until we can replay an item (autoqueued)
             self.pageSize = int(float(__addon__.getSetting('page_size')))              # page up / down size
+            self.statHeight = float(__addon__.getSetting('stat_height'))/100.          # percentage of screen used to display top status
+            self.fudgeResolution()
 
             # handle the nitty gritty of lists and queues
             self.SM = SongManager(self.musicRoot,
@@ -145,20 +153,18 @@ class Juukbox(xbmcgui.Window):
             #------------------------------------------------------
             # skin related stuff
             self.topBand = None                 # band that runs across the top where "now playing" is located
+            self.nowPlayingFrame = None         # we write the text of now playing here
+
             self.cornerImg = None               # image displayed in the top right corner which holds the number remaining
             self.remainingImg = None            # an image of a number showing how many remain to be added to the queue
-            self.nowImg = None                  # an image which says "Now Playing"
-            self.selectGhost = None             # opaque background for the select list
+
+            self.selectorGhost = None           # opaque background for the select list
+            self.selectorList = None            # actual list with songs to select from
             self.queueGhost = None              # opaque background for the queue list
+            self.queueList = None               # actual list with songs enqueued
+
             self.backgroundTiles = []           # Images to be tiled on the background
             self.tilingPattern = [1,1]          # how many tiles to add to the background (X x Y)
-            self.queueList = None
-            self.selectorList = None
-            self.nowPlayingFrame = None
-
-            # kill these
-            self.qRemFrame = None
-            self.backgroundImage = None
 
             # now set up all the parts
             self.initialiseJuukbox()
@@ -174,14 +180,14 @@ class Juukbox(xbmcgui.Window):
 
     def renderTestSKin(self):
         """Render the resolution test skin"""
-        self.backgroundImage = xbmcgui.ControlImage(0,
-                                                    0,
-                                                    self.screenX,
-                                                    self.screenY,
-                                                    os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('rt_bg_img')),
-                                                    aspectRatio=0)
+        backgroundImage = xbmcgui.ControlImage(0,
+                                               0,
+                                               self.screenX,
+                                               self.screenY,
+                                               os.path.join(self.skinDir, "background.png"),
+                                               aspectRatio=0)
 
-        self.addControl(self.backgroundImage)
+        self.addControl(backgroundImage)
 
     #------------------------------------------------------
     # jukebox functionality
@@ -200,62 +206,109 @@ class Juukbox(xbmcgui.Window):
 
         Edit here to "skin" the juukbox
         """
-        self.fudgeResolution()
+        # we need to work out all the dimensions of the skin elements
+        bubble_height = float(int(float(self.screenY) * self.statHeight / 4.) * 4.)
+        top_band_dims = [0, int(bubble_height/4.), self.screenX, int(bubble_height/2.)]
+        corner_img_dims = [int(self.screenX - bubble_height)-1, 0, int(bubble_height), int(bubble_height)]
+        now_playing_dims = [int(self.screenX/8.), int(3.*bubble_height/8.), int(7.*self.screenX/8. - bubble_height), int(bubble_height/4.)]
+        q_rem_dims = [int(self.screenX - 3.*bubble_height/4.), int(bubble_height/4.), int(bubble_height/2.), int(bubble_height/2.)]
 
-        v_border = 30                # fixed border for all rendered objects ( vertical )
-        h_border = 14                # fixed border for all rendered objects ( horizontal )
-        top_bar_height = 60        # the height of the top bar
-        list_width = int((self.screenX - (3. * h_border)) / 2.)
-        list_height = int(self.screenY - top_bar_height - (3. * v_border))
-        list_top = int((2. * v_border) + top_bar_height)
+        screen_split = 18.
+        width_unit = bubble_height/2.
+        ghost_width = (self.screenX - 3.*bubble_height/2.)/2.
+        list_width = ghost_width*0.9
+        list_height = self.screenY - 3.*bubble_height/4.
+        gl_diff = (ghost_width-list_width)/2.
 
-        list_left_queue = h_border
-        list_left_selector = int((2. * h_border) + list_width)
+        queue_ghost_dims = [int(width_unit), 0, int(ghost_width), int(self.screenY)]
+        select_ghost_dims = [int(ghost_width+2*width_unit), 0, int(ghost_width), int(self.screenY)]
+        queue_list_dims = [int(width_unit + gl_diff), int(3.*bubble_height/4.), int(list_width), int(list_height)]
+        select_list_dims = [int(ghost_width+2*width_unit + gl_diff), int(3.*bubble_height/4.), int(list_width), int(list_height)]
 
-        # add a background image
-        self.backgroundImage = xbmcgui.ControlImage(0,
-                                                    0,
-                                                    self.screenX,
-                                                    self.screenY,
-                                                    os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('df_bg_img')),
-                                                    aspectRatio=0)
+        # band that runs across the top where "now playing" is located
+        self.topBand = xbmcgui.ControlImage(top_band_dims[0],
+                                            top_band_dims[1],
+                                            top_band_dims[2],
+                                            top_band_dims[3],
+                                            os.path.join(self.skinDir, "band.png"),
+                                            aspectRatio=0
+                                            )
+
+        # image displayed in the top right corner which holds the number remaining
+        self.cornerImg = xbmcgui.ControlImage(corner_img_dims[0],
+                                              corner_img_dims[1],
+                                              corner_img_dims[2],
+                                              corner_img_dims[3],
+                                              os.path.join(self.skinDir, "corner.png"),
+                                              aspectRatio=0
+                                              )
 
         # add the nowPlaying and queue count frames to the top of the screen
-        self.nowPlayingFrame = xbmcgui.ControlLabel(list_left_queue,
-                                                    v_border,
-                                                    list_width,
-                                                    top_bar_height,
+        self.nowPlayingFrame = xbmcgui.ControlLabel(now_playing_dims[0],
+                                                    now_playing_dims[1],
+                                                    now_playing_dims[2],
+                                                    now_playing_dims[3],
                                                     '',
                                                     'special12',
                                                     '0xFFFFFFFF',
                                                     )
-        self.qRemFrame = xbmcgui.ControlLabel(list_left_selector,
-                                              v_border,
-                                              list_width,
-                                              top_bar_height,
-                                              '',
-                                              'special12',
-                                              '0xFFFFFFFF'
-                                              )
+
+        self.remainingImg = xbmcgui.ControlImage(q_rem_dims[0],
+                                                 q_rem_dims[1],
+                                                 q_rem_dims[2],
+                                                 q_rem_dims[3],
+                                                 os.path.join(self.skinDir, self.getRemImgName()),
+                                                 aspectRatio=0
+                                                 )
+
+        self.selectorGhost = xbmcgui.ControlImage(select_ghost_dims[0],
+                                                  select_ghost_dims[1],
+                                                  select_ghost_dims[2],
+                                                  select_ghost_dims[3],
+                                                  os.path.join(self.skinDir, "ghost.png"),
+                                                  aspectRatio=0
+                                                  )
+
+        self.queueGhost = xbmcgui.ControlImage(queue_ghost_dims[0],
+                                               queue_ghost_dims[1],
+                                               queue_ghost_dims[2],
+                                               queue_ghost_dims[3],
+                                               os.path.join(self.skinDir, "ghost.png"),
+                                               aspectRatio=0
+                                               )
+
         # add a list for the queued stuff
-        self.queueList = xbmcgui.ControlList(list_left_queue,
-                                             list_top,
-                                             list_width,
-                                             list_height,
-                                             selectedColor='0x1234FFFF'
+        self.queueList = xbmcgui.ControlList(queue_list_dims[0],
+                                             queue_list_dims[1],
+                                             queue_list_dims[2],
+                                             queue_list_dims[3],
+                                             textColor='0xFF000000'
                                              )
         # add a list of selections
-        self.selectorList = xbmcgui.ControlList(list_left_selector,
-                                                list_top,
-                                                list_width,
-                                                list_height,
-                                                buttonFocusTexture=os.path.join(os.path.dirname(os.path.realpath(__file__)), __addon__.getSetting('df_bf_img')),
-                                                font='special16',
+        self.selectorList = xbmcgui.ControlList(select_list_dims[0],
+                                                select_list_dims[1],
+                                                select_list_dims[2],
+                                                select_list_dims[3],
+                                                buttonFocusTexture=os.path.join(self.skinDir, "button-focus.png"),
+                                                textColor='0xFF000000'
                                                 )
+
+        self.backgroundImage = xbmcgui.ControlImage(0,
+                                                    0,
+                                                    self.screenX,
+                                                    self.screenY,
+                                                    self.getBG(),
+                                                    aspectRatio=0)
+
+
         # anchor these guys to the window
         self.addControl(self.backgroundImage)
+        self.addControl(self.queueGhost)
+        self.addControl(self.selectorGhost)
+        self.addControl(self.topBand)
         self.addControl(self.nowPlayingFrame)
-        self.addControl(self.qRemFrame)
+        self.addControl(self.cornerImg)
+        self.addControl(self.remainingImg)
         self.addControl(self.queueList)
         self.addControl(self.selectorList)
 
@@ -280,11 +333,6 @@ class Juukbox(xbmcgui.Window):
                 if not self.playerActive:
                     break
             time.sleep(2)
-
-        del self.nowPlayingFrame
-        del self.qRemFrame
-        del self.queueList
-        del self.selectorList
 
         self.close()
 
@@ -367,6 +415,10 @@ class Juukbox(xbmcgui.Window):
 
             if keep_going:
                 time.sleep(2)
+                # handle changin background on this thread
+                ri = randint(1,300)
+                if ri > 299:
+                    self.backgroundImage.setImage(self.getBG())
 
         # make sure that the player is stopped before we leave here...
         xbmc.Player().stop()
@@ -375,6 +427,10 @@ class Juukbox(xbmcgui.Window):
     #------------------------------------------------------
     # IO and rendering
     #
+    def getBG(self):
+        """get a random background image"""
+        return os.path.join(self.skinDir, "bg%d.png" % randint(0,8))
+
     def renderNowPlaying(self, itemName):
         """update the now playing area"""
         self.nowPlayingFrame.setLabel('     Now playing:       %s' % itemName)
@@ -385,7 +441,11 @@ class Juukbox(xbmcgui.Window):
 
     def renderQRemaining(self):
         """update the queue remaining area"""
-        self.qRemFrame.setLabel('Remaining: %d songs' % self.SM.queueRemain)
+        self.remainingImg.setImage(os.path.join(self.skinDir, self.getRemImgName()))
+
+    def getRemImgName(self):
+        """return the name of the image needed for queue remaining"""
+        return "%02d.png" % self.SM.getQueueRemaining()
 
     def renderQueueWindow(self):
         """write the current list of enqueued items"""
@@ -461,7 +521,6 @@ class SongManager(object):
         # Set the state and path variables
         self.userLock = 'unlocked'          # The system starts in a state of being unlocked
         self.nonePickedYet = True           # check to see if at least one item has been picked...
-        self.queueRemain = self.queueMax
         self.currentSong = ''
 
         self.SMLock = Lock()                # play lists get accessed concurrently
@@ -523,9 +582,6 @@ class SongManager(object):
             self.autoQ.remove(fid)
             self.autoQ.append(fid)
 
-            # fix the number remaining
-            self.queueRemain = self.queueMax-len(self.userQ)
-
             # we're off
             self.nonePickedYet = False
         return True
@@ -563,6 +619,10 @@ class SongManager(object):
                 pos += 1
 
         return ret_list
+
+    def getQueueRemaining(self):
+        """work out how many songs are left in the queue"""
+        return self.queueMax - len(self.userQ)
 
     def getNextAlphaPos(self, pos, direction='forward'):
         """Return the position of the next alphabet sep"""
