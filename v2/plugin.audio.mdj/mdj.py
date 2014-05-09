@@ -56,21 +56,22 @@ __email__       = "mike@mikeimelfort.com"
 __status__      = "Development"
 
 ###############################################################################
+action_alpha_page_reverse = 1 # left
+action_alpha_reverse = 58 # 0
+action_alpha_forward = 59 # 1
+action_alpha_page_forward = 2 # right
 
-action_unknown = 0 #'y', black
-action_move_left = 1 #dpad left
-action_move_right = 2 #dpad right
-action_move_up = 3 #dpad up
-action_move_down = 4 #dpad down
-action_skip_next = 5 #left trigger
-action_skip_previous = 6 #right trigger
-action_select = 7 #'a'
-action_back = 9 #'b'
-action_menu = 10 #'back'
-action_info = 11 #'info' (the white button)
-action_stop = 13 #'start'
-action_display = 18 #'x'
+action_artist_page_reverse = 60 # 2
+action_artist_reverse = 61 # 3
+action_artist_forward = 62 # 4
+action_artist_page_forward = 63 # 5
 
+action_album_page_reverse = 64 # 6
+action_album_reverse = 65 # 7
+action_album_forward = 66 # 8
+action_album_page_forward = 67 # 9
+
+action_exit = 92 # backspace
 ###############################################################################
 
 def alert(title, message="", time=5000):
@@ -80,7 +81,6 @@ def alert(title, message="", time=5000):
 def build_url(query):
     return base_url + '?' + urllib.urlencode(query)
 
-print sys.argv
 base_url = sys.argv[0]
 addon_handle = int(sys.argv[1])
 args = urlparse.parse_qs(sys.argv[2][1:])
@@ -136,6 +136,13 @@ class Juukbox(xbmcgui.Window):
             self.autoEmbargo = int(float(__addon__.getSetting('auto_embargo')))* 60    # number of seconds that must be waited until we can replay an item (autoqueued)
             self.pageSize = int(float(__addon__.getSetting('page_size')))              # page up / down size
             self.statHeight = float(__addon__.getSetting('stat_height'))/100.          # percentage of screen used to display top status
+
+            if 'false' == __addon__.getSetting('retarded'):
+                self.retarded = False
+            else:
+                self.retarded = True
+            print self.retarded
+
             self.fudgeResolution()
 
             # handle the nitty gritty of lists and queues
@@ -195,11 +202,12 @@ class Juukbox(xbmcgui.Window):
     def initialiseJuukbox(self):
         """load the music and draw the skin for the first time"""
         self.createSkin()
-        self.SM.loadMusicList()
-        # Draw the skin for the first time
-        self.reRender()
-        self.alert('Welcome to Mike\'s daft juukbox... YTRB')
-        self.startJuukbox()
+        self.SM.loadMusicList(retarded=self.retarded)
+        if not self.retarded:
+            # Draw the skin for the first time
+            self.reRender()
+            self.alert('Welcome to Mike\'s daft juukbox... YTRB')
+            self.startJuukbox()
 
     def createSkin(self):
         """make all the list boxes, etc...
@@ -213,17 +221,23 @@ class Juukbox(xbmcgui.Window):
         now_playing_dims = [int(self.screenX/8.), int(3.*bubble_height/8.), int(7.*self.screenX/8. - bubble_height), int(bubble_height/4.)]
         q_rem_dims = [int(self.screenX - 3.*bubble_height/4.), int(bubble_height/4.), int(bubble_height/2.), int(bubble_height/2.)]
 
-        screen_split = 18.
-        width_unit = bubble_height/2.
-        ghost_width = (self.screenX - 3.*bubble_height/2.)/2.
-        list_width = ghost_width*0.9
+        # we want to make the center of the ghost bar line up with the center of the bubble
+        bar_2_ghost = 30.                    #300px ghost with 10px bars on either side
+        ghost_c_2_C = (self.screenX - 3.*bubble_height/2.)/2.
+        ghost_width = ghost_c_2_C * (bar_2_ghost) / (bar_2_ghost-1.)
+
+        ghost_width = 60./117.*(self.screenX-3.*bubble_height/2.)
+
+        list_width = ghost_width*((bar_2_ghost-2.)/bar_2_ghost)
         list_height = self.screenY - 3.*bubble_height/4.
+
+        ghost_offset = (self.screenX - 2. * ghost_width)/3.
         gl_diff = (ghost_width-list_width)/2.
 
-        queue_ghost_dims = [int(width_unit), 0, int(ghost_width), int(self.screenY)]
-        select_ghost_dims = [int(ghost_width+2*width_unit), 0, int(ghost_width), int(self.screenY)]
-        queue_list_dims = [int(width_unit + gl_diff), int(3.*bubble_height/4.), int(list_width), int(list_height)]
-        select_list_dims = [int(ghost_width+2*width_unit + gl_diff), int(3.*bubble_height/4.), int(list_width), int(list_height)]
+        queue_ghost_dims = [int(ghost_offset), 0, int(ghost_width), int(self.screenY)]
+        select_ghost_dims = [int(ghost_width+2*ghost_offset), 0, int(ghost_width), int(self.screenY)]
+        queue_list_dims = [int(ghost_offset + gl_diff), int(3.*bubble_height/4.), int(list_width), int(list_height)]
+        select_list_dims = [int(ghost_width+2*ghost_offset + gl_diff), int(3.*bubble_height/4.), int(list_width), int(list_height)]
 
         # band that runs across the top where "now playing" is located
         self.topBand = xbmcgui.ControlImage(top_band_dims[0],
@@ -346,37 +360,40 @@ class Juukbox(xbmcgui.Window):
         #print "ACT: %d" % action.getId()
 
         if self.mode == 'resTest':
-            if action.getId() == 92:
+            if action.getId() == action_exit:
                 self.close()
 
         elif self.mode == 'juukbox':
-            if action.getId() == 92:
+            if action.getId() == action_exit:
                 self.stopJuukbox()
 
-            # skip alpha
-            elif action.getId() == 58:
+            elif action.getId() == action_alpha_page_reverse:
+                self.centerSelectorAt(self.SM.getNextAlphaPos(self.selectorList.getSelectedPosition(), direction='reverse', page=True))
+            elif action.getId() == action_alpha_reverse:
                 self.centerSelectorAt(self.SM.getNextAlphaPos(self.selectorList.getSelectedPosition(), direction='reverse'))
-            elif action.getId() == 59:
+            elif action.getId() == action_alpha_forward:
                 self.centerSelectorAt(self.SM.getNextAlphaPos(self.selectorList.getSelectedPosition(), direction='forward'))
+            elif action.getId() == action_alpha_page_forward:
+                self.centerSelectorAt(self.SM.getNextAlphaPos(self.selectorList.getSelectedPosition(), direction='forward', page=True))
 
             # skip artist
-            elif action.getId() == 60:
+            elif action.getId() == action_artist_page_reverse:
                 self.centerSelectorAt(self.SM.getNextArtistPos(self.selectorList.getSelectedPosition(), direction='reverse', page=True))
-            elif action.getId() == 61:
+            elif action.getId() == action_artist_reverse:
                 self.centerSelectorAt(self.SM.getNextArtistPos(self.selectorList.getSelectedPosition(), direction='reverse'))
-            elif action.getId() == 62:
+            elif action.getId() == action_artist_forward:
                 self.centerSelectorAt(self.SM.getNextArtistPos(self.selectorList.getSelectedPosition(), direction='forward'))
-            elif action.getId() == 63:
+            elif action.getId() == action_artist_page_forward:
                 self.centerSelectorAt(self.SM.getNextArtistPos(self.selectorList.getSelectedPosition(), direction='forward', page=True))
 
             # skip album
-            elif action.getId() == 64:
+            elif action.getId() == action_album_page_reverse:
                 self.centerSelectorAt(self.SM.getNextAlbumPos(self.selectorList.getSelectedPosition(), direction='reverse', page=True))
-            elif action.getId() == 65:
+            elif action.getId() == action_album_reverse:
                 self.centerSelectorAt(self.SM.getNextAlbumPos(self.selectorList.getSelectedPosition(), direction='reverse'))
-            elif action.getId() == 66:
+            elif action.getId() == action_album_forward:
                 self.centerSelectorAt(self.SM.getNextAlbumPos(self.selectorList.getSelectedPosition(), direction='forward'))
-            elif action.getId() == 67:
+            elif action.getId() == action_album_page_forward:
                 self.centerSelectorAt(self.SM.getNextAlbumPos(self.selectorList.getSelectedPosition(), direction='forward', page=True))
 
     def onControl(self, control):
@@ -429,7 +446,7 @@ class Juukbox(xbmcgui.Window):
     #
     def getBG(self):
         """get a random background image"""
-        return os.path.join(self.skinDir, "bg%d.png" % randint(0,8))
+        return os.path.join(self.skinDir, "bg%d.jpg" % randint(0,8))
 
     def renderNowPlaying(self, itemName):
         """update the now playing area"""
@@ -463,7 +480,8 @@ class Juukbox(xbmcgui.Window):
         self.selectorList.reset()
         # sort the names and add to the selection list
         for display_name in self.SM.getAvailable():
-            self.selectorList.addItem(display_name)
+            if display_name != "__NONE__":
+                self.selectorList.addItem(display_name)
 
     def getNumDisplayed(self):
         """Work out how many items are displayed in the select list"""
@@ -541,12 +559,14 @@ class SongManager(object):
         self.positionArtist = []
         self.positionAlbum = []
 
-    def loadMusicList(self):
+    def loadMusicList(self, retarded=False):
         """get the contents of a media directory and load it into the autoQ"""
         # get a list of all the items...
-        MD = MediaDir(self.musicRoot)
+        MD = MediaDir(self.musicRoot, retarded=retarded)
         MD.loadDir()
         MD.parseDir()
+        if retarded:
+            return
         (num_items, musics) = MD.extract()
 
         with self.SMLock:
@@ -606,17 +626,22 @@ class SongManager(object):
                     self.position2Type[pos] = type
                     pos += 1
             else:
+                keep = True
                 # set these guys up for quick navigation
                 if type == 'alpha':
                     self.positionAlpha.append(pos)
                 if type == 'artist':
                     self.positionArtist.append(pos)
                 if type == 'album':
-                    self.positionAlbum.append(pos)
+                    if "__None__" in text:
+                        keep = False
+                    else:
+                        self.positionAlbum.append(pos)
 
-                ret_list.append(text)
-                self.position2Type[pos] = type
-                pos += 1
+                if keep:
+                    ret_list.append(text)
+                    self.position2Type[pos] = type
+                    pos += 1
 
         return ret_list
 
@@ -624,15 +649,19 @@ class SongManager(object):
         """work out how many songs are left in the queue"""
         return self.queueMax - len(self.userQ)
 
-    def getNextAlphaPos(self, pos, direction='forward'):
+    def getNextAlphaPos(self, pos, page=False, direction='forward'):
         """Return the position of the next alphabet sep"""
         length = len(self.positionAlpha)
         r = range(length)
         if direction == 'forward':
             for i in r:
                 if self.positionAlpha[i] >= pos:
-                    if i + 1 < length:
-                        return self.positionAlpha[i + 1]
+                    if page:
+                        goto = i + self.pageSize
+                    else:
+                        goto = i + 1
+                    if goto < length:
+                        return self.positionAlpha[goto]
                     else:
                         return self.positionAlpha[0]
             return self.positionAlpha[0]
@@ -640,8 +669,12 @@ class SongManager(object):
             r.reverse()
             for i in r:
                 if self.positionAlpha[i] <= pos:
-                    if i - 1 >= 0:
-                        return self.positionAlpha[i - 1]
+                    if page:
+                        goto = i - self.pageSize
+                    else:
+                        goto = i - 1
+                    if goto >= 0:
+                        return self.positionAlpha[goto]
                     else:
                         return self.positionAlpha[length-1]
             return self.positionAlpha[length-1]
@@ -903,7 +936,6 @@ class SongTree(object):
 ###############################################################################
 
 mode = args.get('mode', None)
-print mode
 if mode is None:
     # this is the pre-juukbox window which allows you to edit settings etc...
 

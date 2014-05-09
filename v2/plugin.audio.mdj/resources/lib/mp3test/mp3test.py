@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ###############################################################################
 #
-# __script_name__.py - description!
+# mp3test.py - handle the shitty ins and outs of mp3s
 #
 ###############################################################################
 #                                                                             #
@@ -33,19 +33,9 @@ __status__ = "Development"
 
 import argparse
 import sys
-
 import os
 import re
-#import errno
-
-#import numpy as np
-#np.seterr(all='raise')
-
-#import matplotlib as mpl
-#import matplotlib.pyplot as plt
-#from mpl_toolkits.mplot3d import axes3d, Axes3D
-#from pylab import plot,subplot,axis,stem,show,figure
-
+import shutil
 
 ###############################################################################
 ###############################################################################
@@ -102,7 +92,7 @@ class MediaDir(object):
     """Functionality for recursively grepping info from media files"""
     goodExts = [".mp3", ".m4a", ".wma", ".ogg"]
 
-    def __init__(self, path, parent=None):
+    def __init__(self, path, parent=None, retarded=False):
         self.path = path
         self.parent = parent
         self.files = []             # list of files in this directory
@@ -113,6 +103,8 @@ class MediaDir(object):
         self.album = "__UNKNOWN__"      # album name
         self.displayNames = {}      # song names, as would be displayed in a player
 
+        self.retarded=retarded
+        self.seenArtists = {}
 
     def fullPath(self, F):
         return os.path.abspath(os.path.join(self.path, F))
@@ -138,134 +130,170 @@ class MediaDir(object):
 
         fail gracefully ... well try to...
         """
-        if hint == None and mungeOnFolder == False:
-            # primary call to this recursive function
-            # try to work out stuff based on the tags
-            artists_found = {}
-            albums_found = {}
+        if self.retarded:
+            # just for k and m's wedding
+            # make tmp_dir, clear if not there
+            tmp_dir = os.path.join(os.path.expanduser("~"), 'mdj_tmp_music')
+            try:
+                shutil.rmtree(tmp_dir)
+            except:
+                pass
+            os.mkdir(tmp_dir)
+
             for F in self.files:
-                MP = {}
-                if os.path.splitext(F)[1] == ".mp3":
-                    MP = MP3FileInfo()
-                    MP.parse(self.fullPath(F))
-
-                # TODO: add wma, ogg etc...
+                MP = MP3FileInfo()
+                MP.parse(self.fullPath(F))
                 try:
-                    self.displayNames[self.fullPath(F)] = MP['title']
-                    if self.displayNames[self.fullPath(F)] == '':
-                        raise KeyError
-
-                    # try to work out artist and album entries
-                    try:
-                        artist = MP['artist'].upper()
-                        if artist != '':
-                            try:
-                                artists_found[artist] += 1
-                            except KeyError:
-                                artists_found[artist] = 1
-                    except KeyError: pass
-
-                    try:
-                        album = MP['album'].upper()
-                        if album != '':
-                            try:
-                                albums_found[album] += 1
-                            except KeyError:
-                                albums_found[album] = 1
-                    except KeyError: pass
-
+                    fred = MP['artist']
                 except KeyError:
-                    # no tag information
-                    self.displayNames[self.fullPath(F)] = self.mungeTitle(F)
+                    print F
+                    raise
+                try:
+                    self.seenArtists[MP['artist']].append(F)
+                except KeyError:
+                    self.seenArtists[MP['artist']] = [F]
 
-            for D in self.subdirs:
-                (artist, album) = D.parseDir()
-                if artist != '':
-                    artist = artist.upper()
+
+            for artist in self.seenArtists:
+                art_dir = os.path.join(tmp_dir, artist)
+                print art_dir
+                os.mkdir(art_dir)
+                art_dir = os.path.join(art_dir, '__NONE__')
+                print art_dir
+                os.mkdir(art_dir)
+                for F in self.seenArtists[artist]:
+                    shutil.copyfile(self.fullPath(F), os.path.join(art_dir, F))
+
+        else:
+            if hint == None and mungeOnFolder == False:
+                # primary call to this recursive function
+                # try to work out stuff based on the tags
+                artists_found = {}
+                albums_found = {}
+                for F in self.files:
+                    MP = {}
+                    if os.path.splitext(F)[1] == ".mp3":
+                        MP = MP3FileInfo()
+                        MP.parse(self.fullPath(F))
+
+                    # TODO: add wma, ogg etc...
                     try:
-                        albums_found[album] += 1
+                        self.displayNames[self.fullPath(F)] = MP['title']
+                        if self.displayNames[self.fullPath(F)] == '':
+                            raise KeyError
+
+                        # try to work out artist and album entries
+                        try:
+                            artist = MP['artist'].upper()
+                            if artist != '':
+                                try:
+                                    artists_found[artist] += 1
+                                except KeyError:
+                                    artists_found[artist] = 1
+                        except KeyError: pass
+
+                        try:
+                            album = MP['album'].upper()
+                            if album != '':
+                                try:
+                                    albums_found[album] += 1
+                                except KeyError:
+                                    albums_found[album] = 1
+                        except KeyError: pass
+
                     except KeyError:
-                        albums_found[album] = 1
-                if album != '':
-                    album = album.upper()
-                    try:
-                        artists_found[artist] += 1
-                    except KeyError:
-                        artists_found[artist] = 1
+                        # no tag information
+                        self.displayNames[self.fullPath(F)] = self.mungeTitle(F)
 
-            most_common_artist = ["", -1]
-            next_common_artist = ["", -1]
-            most_common_album = ["", -1]
-            next_common_album = ["", -1]
-
-            # find the two most common artists for this folder
-            for artist, count in artists_found.items():
-                if artist != "__UNKNOWN__":
-                    if count > most_common_artist[1]:
-                        next_common_artist = [most_common_artist[0], most_common_artist[1]]
-                        most_common_artist = [artist, count]
-                    elif count == most_common_artist[1]:
-                        next_common_artist = [artist, count]
-            if most_common_artist[0] == "__UNKNOWN__" and next_common_artist[0] != "__UNKNOWN__":
-                next_common_artist = most_common_artist
-
-            if most_common_artist[1] > 0:
-                # there must be a clear winner
-                if most_common_artist[1] > 2 * next_common_artist[1]:
-                    self.artist = most_common_artist[0]
-                else:
-                    self.artist = "__VARIOUS__"
-
-            for album, count in albums_found.items():
-                if album != "__UNKNOWN__":
-                    if count > most_common_album[1]:
-                        next_common_album = [most_common_album[0], most_common_album[1]]
-                        most_common_album = [album, count]
-                    elif count == most_common_album[1]:
-                        next_common_album = [album, count]
-            if most_common_album[0] == "__UNKNOWN__" and next_common_album[0] != "__UNKNOWN__":
-                next_common_album = most_common_album
-
-            if most_common_album[1] > 0:
-                if most_common_album[1] > 2 * next_common_album[1]:
-                    self.album = most_common_album[0]
-                else:
-                    self.album = "__VARIOUS__"
-
-            if self.parent is None:
-                # we are back at the top level, propagate down
                 for D in self.subdirs:
-                    D.parseDir(hint="__UNKNOWN__")
+                    (artist, album) = D.parseDir()
+                    if artist != '':
+                        artist = artist.upper()
+                        try:
+                            albums_found[album] += 1
+                        except KeyError:
+                            albums_found[album] = 1
+                    if album != '':
+                        album = album.upper()
+                        try:
+                            artists_found[artist] += 1
+                        except KeyError:
+                            artists_found[artist] = 1
 
-                # try make sense from folder names
-                for D in self.subdirs:
-                    D.parseDir(mungeOnFolder=True)
+                most_common_artist = ["", -1]
+                next_common_artist = ["", -1]
+                most_common_album = ["", -1]
+                next_common_album = ["", -1]
 
-                # finally, try to propogate any gleaned namings downstream
+                # find the two most common artists for this folder
+                for artist, count in artists_found.items():
+                    if artist != "__UNKNOWN__":
+                        if count > most_common_artist[1]:
+                            next_common_artist = [most_common_artist[0], most_common_artist[1]]
+                            most_common_artist = [artist, count]
+                        elif count == most_common_artist[1]:
+                            next_common_artist = [artist, count]
+                if most_common_artist[0] == "__UNKNOWN__" and next_common_artist[0] != "__UNKNOWN__":
+                    next_common_artist = most_common_artist
+
+                if most_common_artist[1] > 0:
+                    # there must be a clear winner
+                    if most_common_artist[1] > 2 * next_common_artist[1]:
+                        self.artist = most_common_artist[0]
+                    else:
+                        self.artist = "__VARIOUS__"
+
+                for album, count in albums_found.items():
+                    album = "__UNKNOWN__"
+                    if album != "__UNKNOWN__":
+                        if count > most_common_album[1]:
+                            next_common_album = [most_common_album[0], most_common_album[1]]
+                            most_common_album = [album, count]
+                        elif count == most_common_album[1]:
+                            next_common_album = [album, count]
+                if most_common_album[0] == "__UNKNOWN__" and next_common_album[0] != "__UNKNOWN__":
+                    next_common_album = most_common_album
+
+                if most_common_album[1] > 0:
+                    if most_common_album[1] > 2 * next_common_album[1]:
+                        self.album = most_common_album[0]
+                    else:
+                        self.album = "__VARIOUS__"
+
+                if self.parent is None:
+                    # we are back at the top level, propagate down
+                    for D in self.subdirs:
+                        D.parseDir(hint="__UNKNOWN__")
+
+                    # try make sense from folder names
+                    for D in self.subdirs:
+                        D.parseDir(mungeOnFolder=True)
+
+                    # finally, try to propogate any gleaned namings downstream
+                    for D in self.subdirs:
+                        D.parseDir(hint=self.artist)
+
+                else:
+                    return (self.artist, self.album)
+            elif mungeOnFolder == False:
+                # we are somewhere in the second propagation
+                if self.artist == "__UNKNOWN__" and hint is not None and hint != "__UNKNOWN__":
+                    self.artist = hint
                 for D in self.subdirs:
                     D.parseDir(hint=self.artist)
+            else: # mungeOnFolder == True
+                if len(self.subdirs) == 0:
+                    # bottom level -> try to work out album name
+                    if self.album == "__UNKNOWN__":
+                        self.album = self.mungeAlbum()
+                else:
+                    # perhaps we are in a directory at the band level
+                    # either way, it's time to munge on the artist name
+                    if self.artist == "__UNKNOWN__":
+                        self.artist = self.mungeArtist()
 
-            else:
-                return (self.artist, self.album)
-        elif mungeOnFolder == False:
-            # we are somewhere in the second propagation
-            if self.artist == "__UNKNOWN__" and hint is not None and hint != "__UNKNOWN__":
-                self.artist = hint
-            for D in self.subdirs:
-                D.parseDir(hint=self.artist)
-        else: # mungeOnFolder == True
-            if len(self.subdirs) == 0:
-                # bottom level -> try to work out album name
-                if self.album == "__UNKNOWN__":
-                    self.album = self.mungeAlbum()
-            else:
-                # perhaps we are in a directory at the band level
-                # either way, it's time to munge on the artist name
-                if self.artist == "__UNKNOWN__":
-                    self.artist = self.mungeArtist()
-
-                for D in self.subdirs:
-                    D.parseDir(mungeOnFolder=True)
+                    for D in self.subdirs:
+                        D.parseDir(mungeOnFolder=True)
 
     def isMusic(self, file):
         return os.path.splitext(file)[1] in self.goodExts

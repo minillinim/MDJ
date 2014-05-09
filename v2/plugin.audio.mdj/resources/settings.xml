@@ -6,6 +6,7 @@
         <setting label="32113" type="slider" id="page_size" default="5" range="1,1,10" option="int"/>
         <setting label="32114" type="slider" id="user_embargo" default="600" range="1,1,600" option="int"/>
         <setting label="32115" type="slider" id="auto_embargo" default="0" range="1,1,600" option="int"/>
+        <setting label="32116" type="bool" id="retarded" default="false"/>
     </category>
     <category label="32201">
         <setting label="32211" type="file" id="skin_dir" default="resources/skins/shiny"/>
